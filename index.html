@@ -3,67 +3,206 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Sitesi Güvenlik Kontrolü</title>
+    <title>Gelişmiş Güvenlik Kontrolü - VirusTotal Entegrasyonu</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin-top: 50px;
+            font-family: 'Arial', sans-serif;
+            background: #eef2f7;
+            margin: 0;
+            padding: 20px;
+            color: #2c3e50;
         }
-        input, button {
-            padding: 10px;
-            margin: 5px;
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #34495e;
+            margin-bottom: 20px;
+        }
+        .input-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        input[type="text"], input[type="file"] {
+            padding: 12px;
+            width: 70%;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+        button {
+            padding: 12px 25px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
         }
         #sonuc {
-            margin-top: 20px;
-            color: #333;
+            margin-top: 25px;
+            line-height: 1.6;
+        }
+        .puan {
+            font-size: 28px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .puan.yuksek { color: #27ae60; }
+        .puan.orta { color: #f39c12; }
+        .puan.dusuk { color: #e74c3c; }
+        .detay {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 8px 0;
+            border-left: 4px solid #3498db;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            transition: width 0.5s;
         }
     </style>
 </head>
 <body>
-    <h1>Web Sitesi Güvenlik Kontrolü</h1>
-    <input type="text" id="url" placeholder="Kontrol edilecek URL (ör: https://example.com)">
-    <button onclick="guvenlikKontrol()">Kontrol Et</button>
-    <div id="sonuc"></div>
+    <div class="container">
+        <h1>Gelişmiş Web Sitesi Güvenlik Kontrolü</h1>
+        <div class="input-area">
+            <input type="text" id="url" placeholder="URL girin (ör: https://example.com)">
+            <input type="file" id="dosya" accept=".exe,.pdf,.docx">
+            <button onclick="guvenlikKontrol()">Kontrol Et</button>
+        </div>
+        <div id="sonuc"></div>
+    </div>
 
     <script>
+        const API_KEY = "BURAYA_VIRUSTOTAL_API_ANAHTARINI_GIR"; // VirusTotal API anahtarını buraya ekle
+
         async function guvenlikKontrol() {
-            const urlInput = document.getElementById("url").value;
+            const urlInput = document.getElementById("url").value.trim();
+            const dosyaInput = document.getElementById("dosya").files[0];
             const sonucDiv = document.getElementById("sonuc");
-            sonucDiv.innerHTML = "Kontrol ediliyor...";
+            sonucDiv.innerHTML = "<p>Kontrol ediliyor...</p>";
+
+            let puan = 100;
+            let rapor = "<h3>Sonuçlar:</h3>";
 
             try {
-                // URL'nin HTTPS ile başlayıp başlamadığını kontrol et
-                if (!urlInput.startsWith("https://")) {
-                    sonucDiv.innerHTML = "Uyarı: Bu site HTTPS kullanmıyor, güvenli olmayabilir!";
-                    return;
+                if (urlInput) {
+                    // URL kontrolü
+                    if (!urlInput.startsWith("https://")) {
+                        puan -= 30;
+                        rapor += "<div class='detay'>⚠️ HTTPS kullanılmıyor! (-30 puan)</div>";
+                    } else {
+                        rapor += "<div class='detay'>✅ HTTPS kullanılıyor.</div>";
+                    }
+
+                    // VirusTotal URL analizi
+                    const urlId = btoa(urlInput).replace(/=/g, "");
+                    const vtUrlResponse = await fetch(`https://www.virustotal.com/api/v3/urls/${urlId}`, {
+                        headers: { "x-apikey": API_KEY }
+                    });
+                    const vtUrlData = await vtUrlResponse.json();
+
+                    if (vtUrlData.data) {
+                        const positives = vtUrlData.data.attributes.last_analysis_stats.malicious;
+                        if (positives > 0) {
+                            puan -= positives * 10;
+                            rapor += `<div class='detay'>⚠️ VirusTotal: ${positives} motor kötü amaçlı buldu. (-${positives * 10} puan)</div>`;
+                        } else {
+                            rapor += "<div class='detay'>✅ VirusTotal: Kötü amaçlı içerik bulunmadı.</div>";
+                        }
+                    } else {
+                        rapor += "<div class='detay'>ℹ️ VirusTotal: Bu URL daha önce taranmamış, tarama başlatılıyor...</div>";
+                        await taramaBaslat("url", urlInput);
+                    }
                 }
 
-                // Fetch ile siteye istek gönderip temel başlıkları kontrol et
-                const response = await fetch(urlInput, { method: "HEAD" });
-                const headers = response.headers;
+                if (dosyaInput) {
+                    // Dosya kontrolü
+                    const formData = new FormData();
+                    formData.append("file", dosyaInput);
 
-                let rapor = "<h3>Sonuçlar:</h3>";
-                rapor += `<p>Durum Kodu: ${response.status}</p>`;
+                    const vtFileResponse = await fetch("https://www.virustotal.com/api/v3/files", {
+                        method: "POST",
+                        headers: { "x-apikey": API_KEY },
+                        body: formData
+                    });
+                    const vtFileData = await vtFileResponse.json();
 
-                // Örnek: Content-Security-Policy başlığını kontrol et
-                if (headers.get("Content-Security-Policy")) {
-                    rapor += "<p>✅ Content-Security-Policy başlığı mevcut.</p>";
-                } else {
-                    rapor += "<p>⚠️ Content-Security-Policy başlığı eksik.</p>";
+                    if (vtFileData.data) {
+                        const analysisId = vtFileData.data.id;
+                        const analysisResult = await analizSonucuBekle(analysisId);
+                        const positives = analysisResult.data.attributes.last_analysis_stats.malicious;
+
+                        if (positives > 0) {
+                            puan -= positives * 15;
+                            rapor += `<div class='detay'>⚠️ VirusTotal: Dosyada ${positives} motor kötü amaçlı buldu. (-${positives * 15} puan)</div>`;
+                        } else {
+                            rapor += "<div class='detay'>✅ VirusTotal: Dosyada kötü amaçlı içerik bulunmadı.</div>";
+                        }
+                    }
                 }
 
-                // X-Content-Type-Options kontrolü
-                if (headers.get("X-Content-Type-Options") === "nosniff") {
-                    rapor += "<p>✅ X-Content-Type-Options doğru ayarlanmış.</p>";
-                } else {
-                    rapor += "<p>⚠️ X-Content-Type-Options eksik veya yanlış.</p>";
-                }
-
-                sonucDiv.innerHTML = rapor;
+                // Puan ve ilerleme çubuğu
+                puan = Math.max(0, puan);
+                const puanClass = puan > 70 ? "yuksek" : puan > 40 ? "orta" : "dusuk";
+                sonucDiv.innerHTML = `
+                    <div class='puan ${puanClass}'>Güvenlik Puanı: ${puan}/100</div>
+                    <div class='progress'><div class='progress-bar' style='width: ${puan}%; background: ${puan > 70 ? "#27ae60" : puan > 40 ? "#f39c12" : "#e74c3c"}'></div></div>
+                    ${rapor}
+                `;
             } catch (error) {
-                sonucDiv.innerHTML = `Hata: ${error.message}. Lütfen geçerli bir URL girin.`;
+                sonucDiv.innerHTML = `<p>Hata: ${error.message}. API anahtarını kontrol et veya geçerli bir giriş yap.</p>`;
             }
+        }
+
+        async function taramaBaslat(tip, deger) {
+            const url = tip === "url" ? "https://www.virustotal.com/api/v3/urls" : "https://www.virustotal.com/api/v3/files";
+            const body = tip === "url" ? `url=${encodeURIComponent(deger)}` : new FormData().append("file", deger);
+            const headers = { "x-apikey": API_KEY, ...(tip === "url" && { "Content-Type": "application/x-www-form-urlencoded" }) };
+
+            const response = await fetch(url, { method: "POST", headers, body });
+            return await response.json();
+        }
+
+        async function analizSonucuBekle(analysisId) {
+            let result;
+            do {
+                await new Promise(resolve => setTimeout(resolve, 5000)); // 5 saniye bekle
+                const response = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+                    headers: { "x-apikey": API_KEY }
+                });
+                result = await response.json();
+            } while (result.data.attributes.status !== "completed");
+            return result;
         }
     </script>
 </body>
