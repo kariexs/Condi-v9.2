@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Sitesi Güvenlik Kontrolü</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+        }
+        #sonuc {
+            margin-top: 20px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Web Sitesi Güvenlik Kontrolü</h1>
+    <input type="text" id="url" placeholder="Kontrol edilecek URL (ör: https://example.com)">
+    <button onclick="guvenlikKontrol()">Kontrol Et</button>
+    <div id="sonuc"></div>
+
+    <script>
+        async function guvenlikKontrol() {
+            const urlInput = document.getElementById("url").value;
+            const sonucDiv = document.getElementById("sonuc");
+            sonucDiv.innerHTML = "Kontrol ediliyor...";
+
+            try {
+                // URL'nin HTTPS ile başlayıp başlamadığını kontrol et
+                if (!urlInput.startsWith("https://")) {
+                    sonucDiv.innerHTML = "Uyarı: Bu site HTTPS kullanmıyor, güvenli olmayabilir!";
+                    return;
+                }
+
+                // Fetch ile siteye istek gönderip temel başlıkları kontrol et
+                const response = await fetch(urlInput, { method: "HEAD" });
+                const headers = response.headers;
+
+                let rapor = "<h3>Sonuçlar:</h3>";
+                rapor += `<p>Durum Kodu: ${response.status}</p>`;
+
+                // Örnek: Content-Security-Policy başlığını kontrol et
+                if (headers.get("Content-Security-Policy")) {
+                    rapor += "<p>✅ Content-Security-Policy başlığı mevcut.</p>";
+                } else {
+                    rapor += "<p>⚠️ Content-Security-Policy başlığı eksik.</p>";
+                }
+
+                // X-Content-Type-Options kontrolü
+                if (headers.get("X-Content-Type-Options") === "nosniff") {
+                    rapor += "<p>✅ X-Content-Type-Options doğru ayarlanmış.</p>";
+                } else {
+                    rapor += "<p>⚠️ X-Content-Type-Options eksik veya yanlış.</p>";
+                }
+
+                sonucDiv.innerHTML = rapor;
+            } catch (error) {
+                sonucDiv.innerHTML = `Hata: ${error.message}. Lütfen geçerli bir URL girin.`;
+            }
+        }
+    </script>
+</body>
+</html>
